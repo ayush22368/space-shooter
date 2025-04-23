@@ -53,7 +53,7 @@
         function assetLoadedCallback(assetName, success) { assetsLoaded++; if (!success) { loadError = true; console.error(`FAILED: ${assetName}`);} if (assetsLoaded === totalAssets) { if (loadError) { console.error("!!! ASSET LOAD FAIL !!!"); ctx.fillStyle='red';ctx.font='bold 24px Arial';ctx.textAlign='center'; ctx.fillText('ERROR LOADING!',canvasWidth/2,canvasHeight/2-30);ctx.font='18px Arial'; ctx.fillText('Check console (F12)',canvasWidth/2,canvasHeight/2+10); } else { console.log("Assets loaded."); gameReady = true; resetGame(); requestAnimationFrame(gameLoop); } } }
         function loadAssets() { console.log("Loading assets...");ctx.fillStyle='white';ctx.font='20px Arial';ctx.textAlign='center';ctx.fillText('Loading...', canvasWidth/2, canvasHeight/2);for(const key in assetPaths){const path=assetPaths[key];const img=new Image();((assetKey, assetPath)=>{img.onload=()=>{ assetLoadedCallback(assetKey,true);};img.onerror=()=>{console.error(`Error loading asset: ${assetKey} from ${assetPath}`); assetLoadedCallback(assetKey,false);};})(key,path);img.src=path;assets[key]=img;}}
 
-        // --- Game Configuration --- (*** MODIFIED BOSS VALUES ***)
+        // --- Game Configuration --- (No changes here, boss settings remain from last time)
         const playerSpeed = 450; const playerBulletSpeed = 700; const playerShootCooldown = 0.25;
         const enemyBulletSpeed = 400; const maxPlayerHealth = 200; const backgroundScrollSpeed = 60;
         const playerBulletDamage = 10; const enemyRetreatSpeed = 50; const maxEnemies = 1;
@@ -61,13 +61,8 @@
         const explosionDuration = 0.35; const heartFallSpeedMin = 120; const heartFallSpeedMax = 200;
         const heartHealthValue = 40; const heartSpawnIntervalMin = 15; const heartSpawnIntervalMax = 28;
         const maxHeartsOnScreen = 1; const bossSpawnThreshold = 4;
-        // --- Easier Boss Settings ---
-        const bossHealth = 550; // *** REDUCED boss health *** (was 700)
-        const bossBulletSpeed = 380; // *** REDUCED boss bullet speed *** (was 420)
-        const bossBulletDamage = 4; // *** REDUCED boss bullet damage *** (was 6)
-        const bossShootCooldown = 1.5; // *** INCREASED boss shoot cooldown (slower shooting) *** (was 1.1)
-        // --- End Easier Boss Settings ---
-        const bossExplosionScale = 2.0;
+        const bossHealth = 550; const bossBulletSpeed = 380; const bossBulletDamage = 4;
+        const bossShootCooldown = 1.5; const bossExplosionScale = 2.0;
         const bossMovementSpeed = 60; const bossTrackingSpeed = 60;
         const bossArrivalDelay = 1.5; const postBossSpawnDelay = 3.0;
 
@@ -81,12 +76,66 @@
         let bossShouldSpawn = false; let bossSpawnDelayTimer = 0;
         const keys = {}; let touchX = null; let isTouching = false;
 
-        // --- Classes (Exactly as before) ---
+        // --- Classes ---
+
+        // Player (No changes)
         class Player { constructor(){if(!assets.playerShip||!assets.playerBullet)throw new Error("Player assets missing!");this.image=assets.playerShip;this.bulletImage=assets.playerBullet;const baseWidth=this.image.naturalWidth||50;const baseHeight=this.image.naturalHeight||50;this.bulletBaseWidth=this.bulletImage.naturalWidth||10; this.scale=0.18; this.width=baseWidth*this.scale;this.height=baseHeight*this.scale;this.x=canvasWidth/2-this.width/2;this.y=canvasHeight-this.height-30;this.speed=playerSpeed;this.health=maxPlayerHealth;this.shootTimer=0;}draw(){if(this.image?.complete&&this.image.naturalWidth>0)ctx.drawImage(this.image,this.x,this.y,this.width,this.height);}update(deltaTime,keys,touchX,isTouching){ this.shootTimer-=deltaTime; let moveX=0; if(keys['ArrowLeft']||keys['a'])moveX-=1; if(keys['ArrowRight']||keys['d'])moveX+=1; if(isTouching&&touchX!==null){ const targetX=touchX-this.width/2; const dx = targetX - this.x; if (Math.abs(dx) > 5) { this.x += dx * 0.18; } } else{ this.x+=moveX*this.speed*deltaTime; } this.x=Math.max(0,Math.min(canvasWidth-this.width,this.x)); if (!isGameOver && this.shootTimer <= 0) { this.shoot(); } } shoot(){ if (this.shootTimer <= 0 && this.bulletImage?.complete) { const bulletScale=0.05; const bulletWidth=Math.max(1,this.bulletBaseWidth*bulletScale); const bulletHeight=Math.max(1,(this.bulletImage.naturalHeight||10)*bulletScale); const bulletX=this.x+this.width/2-bulletWidth/2; const bulletY=this.y-bulletHeight-2; bullets.push(new Bullet(bulletX, bulletY, this.bulletImage, playerBulletSpeed, 'up', bulletScale, playerBulletDamage)); this.shootTimer = playerShootCooldown; } } takeDamage(amount){ if(isGameOver)return; this.health-=amount; if(this.health<=0){ this.health=0; isGameOver=true; if (assets.explosionImage?.complete) { explosions.push(new Explosion(this.x + this.width / 2, this.y + this.height / 2, assets.explosionImage, 1.0)); } console.log("GAME OVER"); } } }
+        // Bullet (No changes)
         class Bullet { constructor(x, y, image, speed, direction = 'up', scale = 1, damage = 5) { this.image = image; this.damage = damage; if (!image || !image.naturalWidth) { const fallbackSize = (direction === 'down' ? { w: 8, h: 15 } : { w: 5, h: 5 }); this.width = Math.max(1, (image?.naturalWidth || fallbackSize.w) * scale); this.height = Math.max(1, (image?.naturalHeight || fallbackSize.h) * scale); } else { const baseWidth = this.image.naturalWidth; const baseHeight = this.image.naturalHeight; this.width = Math.max(1, baseWidth * scale); this.height = Math.max(1, baseHeight * scale); } this.x = x; this.y = y; this.speed = speed; this.direction = direction; this.markedForDeletion = false; } draw() { if (!this.markedForDeletion && this.image && this.image.complete && this.width > 0 && this.height > 0) { ctx.drawImage(this.image, this.x, this.y, this.width, this.height); } } update(deltaTime) { if (this.markedForDeletion) return; if (this.direction === 'up') { this.y -= this.speed * deltaTime; if (this.y + this.height < 0) this.markedForDeletion = true; } else { this.y += this.speed * deltaTime; if (this.y > canvasHeight) this.markedForDeletion = true; } } }
-        class Enemy { constructor(type) { this.isBoss = (type === 'boss'); let enemyImgAsset; let bulletImgAsset; if (this.isBoss) { if (!assets.bossEnemy || !assets.bossBullet) { console.error("Boss assets missing!"); this.markedForDeletion = true; return; } enemyImgAsset = assets.bossEnemy; bulletImgAsset = assets.bossBullet; this.maxHealth = bossHealth; this.shootCooldown = bossShootCooldown; this.scale = 0.25; } else { this.type = type; enemyImgAsset = (type === 1) ? assets.enemyShip1 : assets.enemyShip2; if (!enemyImgAsset || !assets.enemyBullet) { this.markedForDeletion = true; return; } bulletImgAsset = assets.enemyBullet; this.maxHealth = (type === 1) ? 350 : 250; this.shootCooldown = Math.random() * 1.8 + 1.8; this.scale = 0.15; } this.image = enemyImgAsset; this.bulletImage = bulletImgAsset; const baseWidth = this.image.naturalWidth || 100; const baseHeight = this.image.naturalHeight || 100; this.bulletBaseWidth = bulletImgAsset.naturalWidth || 10; this.width = baseWidth * this.scale; this.height = baseHeight * this.scale; this.x = Math.random() * (canvasWidth - this.width); this.y = -this.height; this.speedY = this.isBoss ? 35 : (Math.random() * 70 + 70); this.markedForDeletion = false; this.shootTimer = Math.random() * this.shootCooldown; this.health = this.maxHealth; this.isDamaged = false; this.targetY = this.isBoss ? 60 : -1;}drawHealthBar() { if(this.health>0){const barWidth=this.width*0.9; const barHeight=5; const barX=this.x+(this.width-barWidth)/2; const barY=this.y-barHeight-4; const healthPercentage=Math.max(0,this.health/this.maxHealth);ctx.fillStyle='rgba(150,0,0,0.7)'; ctx.fillRect(barX,barY,barWidth,barHeight);ctx.fillStyle='rgba(0,255,0,0.8)'; ctx.fillRect(barX,barY,barWidth*healthPercentage,barHeight);} }draw() { if(!this.markedForDeletion&&this.image?.complete&&this.image.naturalWidth>0){ctx.drawImage(this.image,this.x,this.y,this.width,this.height);this.drawHealthBar();} } update(deltaTime, player) { if (this.markedForDeletion) return; let targetX = this.x; let allowTracking = false; let currentTrackingSpeed = 0; if (this.isBoss) { if (this.y < this.targetY) { this.y += this.speedY * deltaTime; } else { this.y = Math.max(10, this.y); if (this.targetY < canvasHeight * 0.25) { this.y += 3 * deltaTime; this.targetY += 3 * deltaTime; } allowTracking = true; currentTrackingSpeed = bossTrackingSpeed; let swayX = Math.sin(Date.now() / 1200) * bossMovementSpeed * deltaTime; this.x += swayX; } } else { if (this.isDamaged && this.y > 50) { this.y -= enemyRetreatSpeed * deltaTime; allowTracking = false; } else { this.y += this.speedY * deltaTime; if (this.y > canvasHeight) { this.markedForDeletion = true; return; } allowTracking = (this.y > 20); currentTrackingSpeed = enemyTrackingSpeed; } } if (player && allowTracking && currentTrackingSpeed > 0) { targetX = player.x + player.width / 2 - this.width / 2; const currentX = this.x; const deltaX = targetX - currentX; const deadZone = 10; if (Math.abs(deltaX) > deadZone) { let moveAmount = Math.sign(deltaX) * currentTrackingSpeed * deltaTime; if (Math.abs(moveAmount) > Math.abs(deltaX)) { moveAmount = deltaX; } this.x += moveAmount; } } this.x = Math.max(0, Math.min(canvasWidth - this.width, this.x)); this.shootTimer -= deltaTime; if (this.shootTimer <= 0 && !isGameOver && this.y > 0) { this.shoot(player); this.shootTimer = this.shootCooldown; } } shoot(player) { if (this.markedForDeletion || !this.bulletImage?.complete) { return; } if (this.isBoss) { const bulletScale = 0.18; const bulletWidth = Math.max(1, (assets.bossBullet?.naturalWidth || 15) * bulletScale); const bulletHeight = Math.max(1, (assets.bossBullet?.naturalHeight || 15) * bulletScale); const bulletX = this.x + this.width / 2 - bulletWidth / 2; const bulletY = this.y + this.height * 0.9; bullets.push(new Bullet(bulletX, bulletY, assets.bossBullet, bossBulletSpeed, 'down', bulletScale, bossBulletDamage)); const sideScale = bulletScale * 0.8; const sideWidth = Math.max(1, (assets.bossBullet?.naturalWidth || 15) * sideScale); const sideHeight = Math.max(1, (assets.bossBullet?.naturalHeight || 15) * sideScale); const bulletX_L = this.x + this.width*0.25 - sideWidth/2; const bulletY_L = this.y + this.height * 0.75; bullets.push(new Bullet(bulletX_L, bulletY_L, assets.bossBullet, bossBulletSpeed * 0.85, 'down', sideScale, bossBulletDamage)); const bulletX_R = this.x + this.width*0.75 - sideWidth/2; const bulletY_R = this.y + this.height * 0.75; bullets.push(new Bullet(bulletX_R, bulletY_R, assets.bossBullet, bossBulletSpeed * 0.85, 'down', sideScale, bossBulletDamage)); } else { const bulletScale = 0.06; const bulletWidth = Math.max(1, (assets.enemyBullet?.naturalWidth || 10) * bulletScale); const bulletHeight = Math.max(1, (assets.enemyBullet?.naturalHeight || 10) * bulletScale); const bulletX = this.x + this.width / 2 - bulletWidth / 2; const bulletY = this.y + this.height; bullets.push(new Bullet(bulletX, bulletY, assets.enemyBullet, enemyBulletSpeed, 'down', bulletScale, 5)); } } takeDamage(amount) { if (this.markedForDeletion || this.health <= 0) return; this.health -= amount; if (!this.isBoss) { this.isDamaged = true; } if (this.health <= 0) { this.health = 0; this.markedForDeletion = true; if (this.isBoss) { if (assets.explosionImage?.complete) { explosions.push(new Explosion(this.x + this.width / 2, this.y + this.height / 2, assets.explosionImage, bossExplosionScale)); } score += 250; enemiesDefeatedCount = 0; isBossActive = false; bossShouldSpawn = false; bossSpawnDelayTimer = 0; console.log("BOSS DEFEATED!"); timeToNextSpawn = postBossSpawnDelay; } else { if (assets.explosionImage?.complete) { explosions.push(new Explosion(this.x + this.width / 2, this.y + this.height / 2, assets.explosionImage, 0.1)); } score += (this.type === 1) ? 15 : 25; enemiesDefeatedCount++; console.log(`Enemies defeated: ${enemiesDefeatedCount}/${bossSpawnThreshold}`); if (!isBossActive && !bossShouldSpawn && enemiesDefeatedCount >= bossSpawnThreshold) { console.log(">>> Boss spawn scheduled <<<"); bossShouldSpawn = true; bossSpawnDelayTimer = bossArrivalDelay; } } } } }
+
+        // Enemy (*** MODIFIED Normal Enemy Shoot Cooldown ***)
+        class Enemy {
+             constructor(type) {
+                 this.isBoss = (type === 'boss');
+                 let enemyImgAsset;
+                 let bulletImgAsset;
+                 if (this.isBoss) {
+                     // Boss setup (unchanged from previous version)
+                     if (!assets.bossEnemy || !assets.bossBullet) { console.error("Boss assets missing!"); this.markedForDeletion = true; return; }
+                     enemyImgAsset = assets.bossEnemy; bulletImgAsset = assets.bossBullet;
+                     this.maxHealth = bossHealth;
+                     this.shootCooldown = bossShootCooldown; // Uses boss-specific cooldown
+                     this.scale = 0.25;
+                 } else {
+                     // Normal Enemy setup
+                     this.type = type;
+                     enemyImgAsset = (type === 1) ? assets.enemyShip1 : assets.enemyShip2;
+                     if (!enemyImgAsset || !assets.enemyBullet) { this.markedForDeletion = true; return; }
+                     bulletImgAsset = assets.enemyBullet;
+                     this.maxHealth = (type === 1) ? 350 : 250;
+                     // *** INCREASED Firing Rate (Reduced Cooldown) for Normal Enemies ***
+                     // Range: 0.8s to 1.8s (previously 1.8s to 3.6s)
+                     this.shootCooldown = Math.random() * 1.0 + 0.8;
+                     // *** End Firing Rate Change ***
+                     this.scale = 0.15;
+                 }
+                 this.image = enemyImgAsset; this.bulletImage = bulletImgAsset;
+                 const baseWidth = this.image.naturalWidth || 100; const baseHeight = this.image.naturalHeight || 100;
+                 this.bulletBaseWidth = bulletImgAsset.naturalWidth || 10;
+                 this.width = baseWidth * this.scale; this.height = baseHeight * this.scale;
+                 this.x = Math.random() * (canvasWidth - this.width); this.y = -this.height;
+                 this.speedY = this.isBoss ? 35 : (Math.random() * 70 + 70);
+                 this.markedForDeletion = false;
+                 this.shootTimer = Math.random() * this.shootCooldown; // Initial random timer
+                 this.health = this.maxHealth; this.isDamaged = false;
+                 this.targetY = this.isBoss ? 60 : -1;
+             }
+             // drawHealthBar (No changes)
+             drawHealthBar() { if(this.health>0){const barWidth=this.width*0.9; const barHeight=5; const barX=this.x+(this.width-barWidth)/2; const barY=this.y-barHeight-4; const healthPercentage=Math.max(0,this.health/this.maxHealth);ctx.fillStyle='rgba(150,0,0,0.7)'; ctx.fillRect(barX,barY,barWidth,barHeight);ctx.fillStyle='rgba(0,255,0,0.8)'; ctx.fillRect(barX,barY,barWidth*healthPercentage,barHeight);} }
+             // draw (No changes)
+             draw() { if(!this.markedForDeletion&&this.image?.complete&&this.image.naturalWidth>0){ctx.drawImage(this.image,this.x,this.y,this.width,this.height);this.drawHealthBar();} }
+             // update (No changes)
+             update(deltaTime, player) { if (this.markedForDeletion) return; let targetX = this.x; let allowTracking = false; let currentTrackingSpeed = 0; if (this.isBoss) { if (this.y < this.targetY) { this.y += this.speedY * deltaTime; } else { this.y = Math.max(10, this.y); if (this.targetY < canvasHeight * 0.25) { this.y += 3 * deltaTime; this.targetY += 3 * deltaTime; } allowTracking = true; currentTrackingSpeed = bossTrackingSpeed; let swayX = Math.sin(Date.now() / 1200) * bossMovementSpeed * deltaTime; this.x += swayX; } } else { if (this.isDamaged && this.y > 50) { this.y -= enemyRetreatSpeed * deltaTime; allowTracking = false; } else { this.y += this.speedY * deltaTime; if (this.y > canvasHeight) { this.markedForDeletion = true; return; } allowTracking = (this.y > 20); currentTrackingSpeed = enemyTrackingSpeed; } } if (player && allowTracking && currentTrackingSpeed > 0) { targetX = player.x + player.width / 2 - this.width / 2; const currentX = this.x; const deltaX = targetX - currentX; const deadZone = 10; if (Math.abs(deltaX) > deadZone) { let moveAmount = Math.sign(deltaX) * currentTrackingSpeed * deltaTime; if (Math.abs(moveAmount) > Math.abs(deltaX)) { moveAmount = deltaX; } this.x += moveAmount; } } this.x = Math.max(0, Math.min(canvasWidth - this.width, this.x)); this.shootTimer -= deltaTime; if (this.shootTimer <= 0 && !isGameOver && this.y > 0) { this.shoot(player); this.shootTimer = this.shootCooldown; } }
+             // shoot (No changes - uses correct bullet speed/damage based on boss/normal type)
+             shoot(player) { if (this.markedForDeletion || !this.bulletImage?.complete) { return; } if (this.isBoss) { const bulletScale = 0.18; const bulletWidth = Math.max(1, (assets.bossBullet?.naturalWidth || 15) * bulletScale); const bulletHeight = Math.max(1, (assets.bossBullet?.naturalHeight || 15) * bulletScale); const bulletX = this.x + this.width / 2 - bulletWidth / 2; const bulletY = this.y + this.height * 0.9; bullets.push(new Bullet(bulletX, bulletY, assets.bossBullet, bossBulletSpeed, 'down', bulletScale, bossBulletDamage)); const sideScale = bulletScale * 0.8; const sideWidth = Math.max(1, (assets.bossBullet?.naturalWidth || 15) * sideScale); const sideHeight = Math.max(1, (assets.bossBullet?.naturalHeight || 15) * sideScale); const bulletX_L = this.x + this.width*0.25 - sideWidth/2; const bulletY_L = this.y + this.height * 0.75; bullets.push(new Bullet(bulletX_L, bulletY_L, assets.bossBullet, bossBulletSpeed * 0.85, 'down', sideScale, bossBulletDamage)); const bulletX_R = this.x + this.width*0.75 - sideWidth/2; const bulletY_R = this.y + this.height * 0.75; bullets.push(new Bullet(bulletX_R, bulletY_R, assets.bossBullet, bossBulletSpeed * 0.85, 'down', sideScale, bossBulletDamage)); } else { const bulletScale = 0.06; const bulletWidth = Math.max(1, (assets.enemyBullet?.naturalWidth || 10) * bulletScale); const bulletHeight = Math.max(1, (assets.enemyBullet?.naturalHeight || 10) * bulletScale); const bulletX = this.x + this.width / 2 - bulletWidth / 2; const bulletY = this.y + this.height; bullets.push(new Bullet(bulletX, bulletY, assets.enemyBullet, enemyBulletSpeed, 'down', bulletScale, 5)); } }
+             // takeDamage (No changes)
+             takeDamage(amount) { if (this.markedForDeletion || this.health <= 0) return; this.health -= amount; if (!this.isBoss) { this.isDamaged = true; } if (this.health <= 0) { this.health = 0; this.markedForDeletion = true; if (this.isBoss) { if (assets.explosionImage?.complete) { explosions.push(new Explosion(this.x + this.width / 2, this.y + this.height / 2, assets.explosionImage, bossExplosionScale)); } score += 250; enemiesDefeatedCount = 0; isBossActive = false; bossShouldSpawn = false; bossSpawnDelayTimer = 0; console.log("BOSS DEFEATED!"); timeToNextSpawn = postBossSpawnDelay; } else { if (assets.explosionImage?.complete) { explosions.push(new Explosion(this.x + this.width / 2, this.y + this.height / 2, assets.explosionImage, 0.1)); } score += (this.type === 1) ? 15 : 25; enemiesDefeatedCount++; console.log(`Enemies defeated: ${enemiesDefeatedCount}/${bossSpawnThreshold}`); if (!isBossActive && !bossShouldSpawn && enemiesDefeatedCount >= bossSpawnThreshold) { console.log(">>> Boss spawn scheduled <<<"); bossShouldSpawn = true; bossSpawnDelayTimer = bossArrivalDelay; } } } }
+        }
+        // Asteroid (No changes)
         class Asteroid { constructor(){if(!assets.asteroid){this.markedForDeletion=true;return;}this.image=assets.asteroid; const scale=Math.random()*0.1 + 0.05; const baseWidth=this.image.naturalWidth||40;const baseHeight=this.image.naturalHeight||40;this.width=baseWidth*scale;this.height=baseHeight*scale;this.x=Math.random()*(canvasWidth-this.width);this.y=-(this.height+Math.random()*150+50);this.speed=Math.random()*200+120; this.speedX=(Math.random()-0.5)*50;this.markedForDeletion=false;this.health=30*scale; this.angle=0;this.rotationSpeed=(Math.random()-0.5)*1.5;}draw(){if(!this.markedForDeletion&&this.image?.complete&&this.image.naturalWidth>0){ctx.save();ctx.translate(this.x+this.width/2,this.y+this.height/2);ctx.rotate(this.angle);ctx.drawImage(this.image,-this.width/2,-this.height/2,this.width,this.height);ctx.restore();}}update(deltaTime){if(this.markedForDeletion)return;this.y+=this.speed*deltaTime;this.x+=this.speedX*deltaTime;this.angle+=this.rotationSpeed*deltaTime;if(this.y>canvasHeight||this.x+this.width<0||this.x>canvasWidth){this.markedForDeletion=true;}}takeDamage(amount){ if(this.markedForDeletion)return; this.health-=amount; if(this.health<=0){ this.markedForDeletion=true; score+=5; } } }
+        // Explosion (No changes)
         class Explosion { constructor(x, y, image, scale = 1) { if (!image?.complete || !image.naturalWidth) { this.markedForDeletion = true; return; } this.image = image; this.scale = scale; const baseWidth = this.image.naturalWidth; const baseHeight = this.image.naturalHeight; this.drawWidth = baseWidth * this.scale; this.drawHeight = baseHeight * this.scale; this.x = x - this.drawWidth / 2; this.y = y - this.drawHeight / 2; this.lifetime = explosionDuration * (this.scale > 1.5 ? 1.3 : 1); this.markedForDeletion = false; } update(deltaTime) { if (this.markedForDeletion) return; this.lifetime -= deltaTime; if (this.lifetime <= 0) { this.markedForDeletion = true; } } draw() { if (!this.markedForDeletion && this.image?.complete) { ctx.drawImage( this.image, this.x, this.y, this.drawWidth, this.drawHeight ); } } }
+        // HeartPowerUp (No changes)
         class HeartPowerUp { constructor() { this.width = 35; this.height = 35; this.x = Math.random() * (canvasWidth - this.width); this.y = -this.height - Math.random() * 50; this.speed = Math.random() * (heartFallSpeedMax - heartFallSpeedMin) + heartFallSpeedMin; this.markedForDeletion = false; this.element = document.createElement('div'); this.element.className = 'heart-powerup'; this.element.style.left = `${this.x}px`; this.element.style.top = `${this.y}px`; this.element.style.display = 'block'; document.body.appendChild(this.element); } update(deltaTime) { if (this.markedForDeletion || !this.element) return; this.y += this.speed * deltaTime; this.element.style.top = `${this.y}px`; this.x = parseFloat(this.element.style.left); if (this.y > canvasHeight) { this.markedForDeletion = true; this.removeElement(); } } collect() { console.log("CSS heart power-up collected!"); this.markedForDeletion = true; this.removeElement(); return heartHealthValue; } removeElement() { if (this.element && this.element.parentNode) { this.element.parentNode.removeChild(this.element); this.element = null; } } }
 
         // --- Helper Functions --- (No changes)
@@ -98,24 +147,26 @@
         // --- Resize Handler --- (No changes)
         window.addEventListener('resize',()=>{ canvasWidth=window.innerWidth;canvasHeight=window.innerHeight; canvas.width=canvasWidth;canvas.height=canvasHeight; if(player){ player.x=Math.max(0,Math.min(canvasWidth-player.width, player.x)); player.y=canvasHeight-player.height-30; } heartPowerUps.forEach(heart => heart.removeElement()); heartPowerUps = []; if(!gameReady){ ctx.clearRect(0, 0, canvasWidth, canvasHeight); if(loadError){ ctx.fillStyle='red';ctx.font='bold 24px Arial';ctx.textAlign='center'; ctx.fillText('ERROR LOADING!',canvasWidth/2,canvasHeight/2-30);ctx.font='18px Arial'; ctx.fillText('Check console (F12)',canvasWidth/2,canvasHeight/2+10); } else{ ctx.fillStyle='white';ctx.font='20px Arial';ctx.textAlign='center';ctx.fillText('Loading...',canvasWidth/2,canvasHeight/2); } } else if (isGameOver) { drawGameOver(); } });
 
-        // --- Input Handling --- (*** ENSURED CLICK LISTENER IS CLEAR ***)
+        // --- Input Handling --- (*** MODIFIED touchend FOR RESTART ***)
+
+        // Keyboard input (no changes)
         window.addEventListener('keydown',(e)=>{keys[e.key]=true; if(isGameOver&&(e.key==='Enter'||e.key===' ')){ console.log("Game Over - Enter/Space detected, attempting reset..."); resetGame(); } if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','a','d','w','s'].includes(e.key)){e.preventDefault();} });
         window.addEventListener('keyup',(e)=>{keys[e.key]=false;});
 
-        // This listener handles both taps on mobile and clicks on desktop for restarting
+        // Click listener (primarily for desktop, but catches some taps)
         canvas.addEventListener('click', (e) => {
+            // Only reset if game is actually over. Prevents accidental reset on click during gameplay.
             if (isGameOver) {
-                console.log("Game Over - CANVAS Click/Tap detected, attempting reset..."); // Log for debugging
+                console.log("Game Over - CANVAS Click detected, attempting reset...");
                 resetGame();
             }
-            // No 'else' needed, clicks during gameplay don't restart
         });
 
-        // Touch events are primarily for controlling the player during gameplay
+        // Touch start (for player movement)
         canvas.addEventListener('touchstart',(e)=>{
             e.preventDefault(); // Prevent default touch actions like scrolling
             if(isGameOver){
-                // Let the 'click' event listener handle the restart on tap
+                // Don't initiate player movement if game is over
                 return;
             }
             // Handle player movement touch
@@ -123,23 +174,33 @@
             if(!touch) return;
             isTouching=true;
             touchX=touch.clientX;
-        },{passive:false}); // passive:false because we call preventDefault
+        },{passive:false});
 
+        // Touch move (for player movement)
         canvas.addEventListener('touchmove',(e)=>{
             e.preventDefault(); // Prevent scrolling while dragging finger
-            if(!isTouching || isGameOver) return; // Don't move player if game over or not touching
+            if(!isTouching || isGameOver) return;
             const touch=e.touches[0];
             if(!touch) return;
             touchX=touch.clientX;
-        },{passive:false}); // passive:false because we call preventDefault
+        },{passive:false});
 
+        // Touch end (handle player movement stop AND game restart on tap)
         canvas.addEventListener('touchend',(e)=>{
-            // If it's the last touch ending, stop player movement control
+            // Check if this is the last touch ending
             if (e.touches.length === 0) {
-                isTouching = false;
+                isTouching = false; // Stop player movement control
                 touchX = null;
+
+                // *** ADDED: Explicitly check for restart on final touchend if game is over ***
+                if (isGameOver) {
+                    console.log("Game Over - CANVAS Touchend (final touch) detected, attempting reset...");
+                    resetGame();
+                }
+                // *** End Added Restart Logic ***
             }
-            // Don't prevent default on touchend; allows the 'click' event to fire properly after a tap
+            // We don't prevent default here to allow the 'click' event to potentially fire.
+            // The multiple checks (click + touchend) make the restart more reliable.
         });
 
 
