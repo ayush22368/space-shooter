@@ -49,7 +49,7 @@
         function assetLoadedCallback(assetName, success) { assetsLoaded++; if (!success) { loadError = true; console.error(`FAILED: ${assetName}`);} if (assetsLoaded === totalAssets) { if (loadError) { console.error("!!! ASSET LOAD FAIL !!!"); ctx.fillStyle='red';ctx.font='bold 24px Arial';ctx.textAlign='center'; ctx.fillText('ERROR LOADING!',canvasWidth/2,canvasHeight/2-30);ctx.font='18px Arial'; ctx.fillText('Check console (F12)',canvasWidth/2,canvasHeight/2+10); } else { console.log("Assets loaded."); gameReady = true; resetGame(); requestAnimationFrame(gameLoop); } } }
         function loadAssets() { console.log("Loading assets...");ctx.fillStyle='white';ctx.font='20px Arial';ctx.textAlign='center';ctx.fillText('Loading...', canvasWidth/2, canvasHeight/2);for(const key in assetPaths){const path=assetPaths[key];const img=new Image();((assetKey, assetPath)=>{img.onload=()=>{ assetLoadedCallback(assetKey,true);};img.onerror=()=>{console.error(`Error loading: ${assetKey}`); assetLoadedCallback(assetKey,false);};})(key,path);img.src=path;assets[key]=img;}}
 
-        // --- Game Configuration ---
+        // --- Game Configuration --- (No changes)
         const playerSpeed = 450; const playerBulletSpeed = 700; const playerShootCooldown = 0.25;
         const enemyBulletSpeed = 400; const maxPlayerHealth = 200; const backgroundScrollSpeed = 60;
         const playerBulletDamage = 10; const enemyRetreatSpeed = 50; const maxEnemies = 1;
@@ -58,8 +58,8 @@
         const explosionDuration = 0.35; const heartFallSpeedMin = 140; const heartFallSpeedMax = 220;
         const heartHealthValue = 40; const heartSpawnIntervalMin = 12; const heartSpawnIntervalMax = 25;
         const maxHeartsOnScreen = 1; const bossSpawnThreshold = 4;
-        const bossHealth = 400; // *** MUCH Easier Boss Health (was 600) ***
-        const bossBulletSpeed = 450; const bossBulletDamage = 5;
+        const bossHealth = 800; // Medium boss health
+        const bossBulletSpeed = 450; const bossBulletDamage = 7;
         const bossShootCooldown = 0.9; const bossExplosionScale = 2.5;
         const bossMovementSpeed = 70; const bossTrackingSpeed = 70;
         const bossArrivalDelay = 1.0; const postBossSpawnDelay = 2.5;
@@ -88,14 +88,34 @@
         function drawGameOver() { ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,canvasWidth,canvasHeight);ctx.fillStyle='white';ctx.font='bold 60px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('GAME OVER',canvasWidth/2,canvasHeight/2-60);ctx.font='30px Arial';ctx.fillText(`Final Score: ${score}`,canvasWidth/2,canvasHeight/2+0);ctx.font='24px Arial';ctx.fillText('Tap, Click, or Press Enter to Restart',canvasWidth/2,canvasHeight/2+60); }
         function resetGame() { if(!gameReady)return; console.log("--- Resetting Game ---"); score=0;isGameOver=false;player=null; try{ player=new Player(); if(!player)throw new Error("Player create failed."); playerHealth=maxPlayerHealth; player.health=maxPlayerHealth;}catch(error){ console.error("CRITICAL:",error);isGameOver=true;/*Err*/ ctx.fillStyle='red';ctx.font='20px Arial';ctx.textAlign='center';ctx.fillText('FATAL ERROR!',canvasWidth/2,canvasHeight/2-30);ctx.fillText('Check console (F12).',canvasWidth/2,canvasHeight/2);return;} bullets=[]; enemies=[]; asteroids=[]; explosions=[]; heartPowerUps.forEach(heart => heart.removeElement()); heartPowerUps = []; heartSpawnTimer = Math.random() * (heartSpawnIntervalMax - heartSpawnIntervalMin) + heartSpawnIntervalMin; timeToNextSpawn = enemySpawnDelay; nextEnemyType=(Math.random()<0.5)?1:2; asteroidSpawnTimer=3.0; lastTime=0; Object.keys(keys).forEach(key=>keys[key]=false); touchX=null; isTouching=false; bgY1=0; bgY2=-canvasHeight; enemiesDefeatedCount = 0; isBossActive = false; bossShouldSpawn = false; bossSpawnDelayTimer = 0; }
 
-        // --- Input Handling --- (No changes)
+        // --- MODIFIED RESIZE HANDLER to remove hearts ---
+        window.addEventListener('resize',()=>{
+            canvasWidth=window.innerWidth;canvasHeight=window.innerHeight;
+            canvas.width=canvasWidth;canvas.height=canvasHeight;
+            if(player){
+                player.x=Math.max(0,Math.min(canvasWidth-player.width,player.x));
+                player.y=canvasHeight-player.height-30;
+            }
+             // *** Remove existing hearts on resize to prevent visual glitches ***
+             heartPowerUps.forEach(heart => heart.removeElement());
+             heartPowerUps = []; // Clear the array as well
+             // *** End heart removal ***
+
+             if(!gameReady){
+                 if(loadError){ /*Show Load Error*/ ctx.fillStyle='red';ctx.font='bold 24px Arial';ctx.textAlign='center'; ctx.fillText('ERROR LOADING!',canvasWidth/2,canvasHeight/2-30);ctx.font='18px Arial'; ctx.fillText('Check console (F12)',canvasWidth/2,canvasHeight/2+10); }
+                 else{/*Show Loading*/ ctx.fillStyle='white';ctx.font='20px Arial';ctx.textAlign='center';ctx.fillText('Loading...',canvasWidth/2,canvasHeight/2); }
+            }
+        });
+        // --- END MODIFIED RESIZE HANDLER ---
+
+        // --- Input Handling --- (No other changes here)
         window.addEventListener('keydown',(e)=>{keys[e.key]=true; if(isGameOver&&(e.key==='Enter'||e.key===' ')){resetGame();} if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','a','d','w'].includes(e.key)){e.preventDefault();} });
         window.addEventListener('keyup',(e)=>{keys[e.key]=false;});
         canvas.addEventListener('mousedown',(e)=>{if(isGameOver){resetGame();}});
         canvas.addEventListener('touchstart',(e)=>{e.preventDefault();if(isGameOver){resetGame();if(!player)return;}const touch=e.touches[0];if(!touch)return;isTouching=true;touchX=touch.clientX;},{passive:false});
         canvas.addEventListener('touchmove',(e)=>{e.preventDefault();if(!isTouching||isGameOver)return;const touch=e.touches[0];if(!touch)return;touchX=touch.clientX;},{passive:false});
         canvas.addEventListener('touchend',(e)=>{e.preventDefault();if(e.touches.length===0){isTouching=false;touchX=null;}},{passive:false});
-        window.addEventListener('resize',()=>{canvasWidth=window.innerWidth;canvasHeight=window.innerHeight;canvas.width=canvasWidth;canvas.height=canvasHeight;if(player){player.x=Math.max(0,Math.min(canvasWidth-player.width,player.x));player.y=canvasHeight-player.height-30;} if(!gameReady){if(loadError){/*Err*/}else{/*Load*/}}});
+
 
         // --- Game Loop --- (No changes)
         function gameLoop(timestamp) { requestAnimationFrame(gameLoop); if (!gameReady || loadError) return; if (!player && !isGameOver) { resetGame(); return; } if (lastTime === 0) { lastTime = timestamp; return; } const deltaTime = (timestamp - lastTime) / 1000; lastTime = timestamp; const dt = Math.min(deltaTime, 0.1); ctx.clearRect(0, 0, canvasWidth, canvasHeight); bgY1 += backgroundScrollSpeed * dt; bgY2 += backgroundScrollSpeed * dt; if (bgY1 >= canvasHeight) bgY1 = bgY2 - canvasHeight; if (bgY2 >= canvasHeight) bgY2 = bgY1 - canvasHeight; if (assets.background?.complete) { ctx.drawImage(assets.background, 0, bgY1, canvasWidth, canvasHeight); ctx.drawImage(assets.background, 0, bgY2, canvasWidth, canvasHeight); } else { ctx.fillStyle = '#00001a'; ctx.fillRect(0, 0, canvasWidth, canvasHeight); } if (!isGameOver) { if (player) { player.update(dt, keys, touchX, isTouching); } bullets.forEach(bullet => bullet.update(dt)); enemies.forEach(enemy => enemy.update(dt, player)); asteroids.forEach(asteroid => asteroid.update(dt)); explosions.forEach(explosion => explosion.update(dt)); heartPowerUps.forEach(heart => heart.update(dt)); if (bossShouldSpawn) { bossSpawnDelayTimer -= dt; if (bossSpawnDelayTimer <= 0 && !isBossActive) { console.log(">>> Spawning BOSS Now! <<<"); enemies.push(new Enemy('boss')); isBossActive = true; bossShouldSpawn = false; } } timeToNextSpawn -= dt; if (!isBossActive && !bossShouldSpawn && timeToNextSpawn <= 0 && enemies.length < maxEnemies) { enemies.push(new Enemy(nextEnemyType)); nextEnemyType = (nextEnemyType === 1) ? 2 : 1; timeToNextSpawn = enemySpawnDelay; } asteroidSpawnTimer -= dt; if (asteroidSpawnTimer <= 0) { asteroids.push(new Asteroid()); asteroidSpawnTimer = Math.random() * 1.0 + 0.5; } heartSpawnTimer -= dt; if (heartSpawnTimer <= 0 && heartPowerUps.length < maxHeartsOnScreen) { heartPowerUps.push(new HeartPowerUp()); heartSpawnTimer = Math.random() * (heartSpawnIntervalMax - heartSpawnIntervalMin) + heartSpawnIntervalMin; } bullets.forEach((bullet) => { if(bullet.markedForDeletion)return; if(bullet.direction==='up'){ enemies.forEach((enemy)=>{ if(!enemy.markedForDeletion&&checkCollision(bullet,enemy)){ enemy.takeDamage(bullet.damage); bullet.markedForDeletion=true;return; }}); if(bullet.markedForDeletion)return; asteroids.forEach((asteroid)=>{ if(!asteroid.markedForDeletion&&checkCollision(bullet,asteroid)){ asteroid.takeDamage(bullet.damage); bullet.markedForDeletion=true;return; }}); }else{ if(player&&checkCollision(bullet,player)){ player.takeDamage(bullet.damage); bullet.markedForDeletion=true; } } }); enemies.forEach((enemy) => { if(player&&!enemy.markedForDeletion&&!enemy.isDamaged&&checkCollision(player,enemy)){ player.takeDamage(enemy.isBoss ? 25 : 15); if (!enemy.isBoss) { enemy.takeDamage(999); } else { enemy.takeDamage(50); } }}); asteroids.forEach((asteroid) => { if(player&&!asteroid.markedForDeletion&&checkCollision(player,asteroid)){player.takeDamage(10);asteroid.takeDamage(999);}}); if (player) { heartPowerUps.forEach((heart) => {if (!heart.markedForDeletion && checkCollision(player, heart)) {if (player.health < maxPlayerHealth) {const healthGained = heart.collect();player.health = Math.min(maxPlayerHealth, player.health + healthGained);} }});} bullets = bullets.filter(bullet => !bullet.markedForDeletion); enemies = enemies.filter(enemy => !enemy.markedForDeletion); asteroids = asteroids.filter(asteroid => !asteroid.markedForDeletion); explosions = explosions.filter(explosion => !explosion.markedForDeletion); heartPowerUps = heartPowerUps.filter(heart => !heart.markedForDeletion); } if (player && !isGameOver) { player.draw(); } bullets.forEach(bullet => bullet.draw()); enemies.forEach(enemy => enemy.draw()); asteroids.forEach(asteroid => asteroid.draw()); explosions.forEach(explosion => explosion.draw()); if (isGameOver) { drawGameOver(); } else { drawUI(); } }
